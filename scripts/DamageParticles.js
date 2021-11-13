@@ -8,7 +8,7 @@ script.import("Core.lib");
 script.import("utils/RenderUtils.js");
 
 var particles = new java.util.LinkedList();
-var healthMap = new Object();
+var healthMap = new java.util.HashMap();
 
 module = {
     name: "DamageParticles",
