@@ -43,7 +43,7 @@ module = {
     name: "PointerESP",
     category: "Render",
     values: [
-        mode = value.createList("Mode", ["Solid", "OutLine"], "Solid"),
+        mode = value.createList("Mode", ["Solid", "Line"], "Solid"),
         posX = value.createFloat("PosX", 0.0, -0.5, 0.5),
         posY = value.createFloat("PosY", 0.0, -0.5, 0.5),
         radius = value.createFloat("Radius", 25.0, 10.0, 100.0),
@@ -60,7 +60,7 @@ module = {
         var yCenter = sr.getScaledHeight_double() * (0.5 + posY.get());
 
         Java.from(mc.theWorld.loadedEntityList)
-            .filter(function(entity) entity instanceof EntityLivingBase && (EntityUtils.isSelected(entity, true) || TeamsModule.isInYourTeam(entity)))
+            .filter(function(entity) EntityUtils.isSelected(entity, true) || entity instanceof EntityPlayer && TeamsModule.isInYourTeam(entity))
             .sort(function(b, a) mc.thePlayer.getDistanceToEntity(a) - mc.thePlayer.getDistanceToEntity(b)) //Distance falling order
             .forEach(function(entity) {
                 var loaddist = 0.2;
@@ -90,7 +90,7 @@ module = {
                         break;
                     case "distance":
                         var distance = mc.thePlayer.getDistanceToEntity(entity);
-                        var hue = (TeamsModule.isInYourTeam(entity) || distance >= 48) ? 240 : (distance < 8 ? 0 : (distance - 8) * 6);
+                        var hue = (entity instanceof EntityPlayer && TeamsModule.isInYourTeam(entity) || distance >= 48) ? 240 : (distance < 8 ? 0 : (distance - 8) * 6);
                         color = Color.getHSBColor(hue / 360, 0.8, 0.8).getRGB() | alpha.get() << 24;
                         break;
                     default:
