@@ -1,8 +1,16 @@
+/**
+ * 
+ * LWJGL Reference: https://github.com/LWJGL/lwjgl/blob/master/src/templates/org/lwjgl/opengl/GL11.java
+ * 
+ * 
+ * */
 var GL11 = Java.type("org.lwjgl.opengl.GL11");
 var GlStateManager = Java.type("net.minecraft.client.renderer.GlStateManager");
 var Gui = Java.type("net.minecraft.client.gui.Gui");
 
 var Color = Java.type('java.awt.Color');
+
+var RenderUtils = Java.type("net.ccbluex.liquidbounce.utils.render.RenderUtils");
 
 var colorCode = [0x000000, 0x0000AA, 0x00AA00, 0x00AAAA, 0xAA0000, 0xAA00AA, 0xFFAA00, 0xAAAAAA, 0x555555, 0x5555FF, 0x55FF55, 0x55FFFF, 0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF];
 
@@ -62,6 +70,29 @@ function disableGL2D() {
     GL11.glHint(3155, 4352);
 }
 
+function enableGL3D() {
+    GL11.glPushMatrix();
+    GL11.glEnable(0x0BE2);
+    GL11.glBlendFunc(0x0302, 0x0303);
+    GL11.glShadeModel(0x1D01);
+    GL11.glDisable(0x0DE1);
+    GL11.glEnable(0x0B20);
+    GL11.glDisable(0x0B71);
+    GL11.glDisable(0x0B50);
+    GL11.glDepthMask(false);
+    GL11.glHint(0x0C52, 0x1102);
+}
+
+function disableGL3D() {
+    GL11.glDepthMask(true);
+    GL11.glEnable(0x0B71);
+    GL11.glDisable(0x0B20);
+    GL11.glEnable(0x0DE1);
+    GL11.glDisable(0x0BE2);
+    GL11.glPopMatrix();
+    GL11.glColor4f(1, 1, 1, 1);
+}
+
 /**
  * Linear Algebra
  */
@@ -72,8 +103,10 @@ function disableGL2D() {
     "ReadableVector", "ReadableVector2f", "ReadableVector3f", "ReadableVector4f", "Quaternion",
     "Vector", "Vector2f", "Vector3f", "Vector4f",
     "WritableVector2f", "WritableVector3f", "WritableVector4f"
-].forEach(function(v) { eval(v + "=Java.type(\"org.lwjgl.util.vector." + v + "\")") });
+].forEach(function(v) eval(v + "=Java.type(\"org.lwjgl.util.vector." + v + "\")"));
 
+var AxisAlignedBB = Java.type("net.minecraft.util.AxisAlignedBB");
+var Vec3 = Java.type("net.minecraft.util.Vec3");
 
 /**
  * @static
@@ -88,4 +121,11 @@ function rotate(vec2, rad) {
         vec2[0] * cos - vec2[1] * sin,
         vec2[0] * sin + vec2[1] * cos,
     ];
+}
+
+/**
+ * @param {AxisAlignedBB} box
+ */
+function getCenter(box) {
+    return new Vec3((box.maxX + box.minX) * 0.5, (box.maxY + box.minY) * 0.5, (box.maxZ + box.minZ) * 0.5);
 }
