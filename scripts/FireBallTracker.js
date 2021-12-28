@@ -1,7 +1,7 @@
 script = registerScript({
     name: "FireBallTracker",
     authors: ["MyScarlet"],
-    version: "1.0"
+    version: "1.1"
 });
 
 script.import("Core.lib");
@@ -12,9 +12,13 @@ module = {
     description: "Draw the route of fireballs.",
     category: "Render",
     values: [
-        lineWidth = value.createFloat("LineWidth", 2, 0.5, 5)
+        lineWidth = value.createFloat("LineWidth", 2, 0.5, 5),
+        lengthLimit = value.createFloat("LengthLimit", 256, 16, 512),
+        drawHitBlock = value.createBoolean("DrawHitBlock", true)
     ],
     onRender3D: function() {
+        var hitPos = [];
+
         GL11.glPushMatrix();
 
         GL11.glBlendFunc(770, 771);
@@ -27,10 +31,11 @@ module = {
 
         GL11.glBegin(1);
 
-        for each (var entity in mc.theWorld.loadedEntityList) {
+        for each(var entity in mc.theWorld.loadedEntityList) {
             if (!(entity instanceof EntityFireball)) continue;
 
-            var acceleration = new Vec3(entity.accelerationX, entity.accelerationY, entity.accelerationZ);
+            //direction vector
+            var acceleration = new Vec3(entity.accelerationX, entity.accelerationY, entity.accelerationZ).normalize();
 
             if (acceleration.lengthVector() == 0) continue;
 
@@ -38,10 +43,12 @@ module = {
                 cur = position.add(acceleration);
             var rayTraceResult = null;
 
-            for (; !rayTraceResult && cur.distanceTo(position) < 128; rayTraceResult = mc.theWorld.rayTraceBlocks(position, cur, false, true, false))
+            for (; !rayTraceResult && cur.distanceTo(position) < lengthLimit.get(); rayTraceResult = mc.theWorld.rayTraceBlocks(position, cur, false, true, false))
                 cur = cur.add(acceleration);
 
-            var hitPos = rayTraceResult ? rayTraceResult.hitVec : cur;
+            var hitVec = rayTraceResult ? rayTraceResult.hitVec : cur;
+
+            rayTraceResult && rayTraceResult.getBlockPos() && hitPos.push(rayTraceResult.getBlockPos());
 
             var x = position.xCoord - mc.getRenderManager().renderPosX,
                 y = position.yCoord - mc.getRenderManager().renderPosY,
@@ -49,7 +56,7 @@ module = {
 
             GL11.glColor4f(1.0, 0.0, 0.0, 1.0);
 
-            GL11.glVertex3d(hitPos.xCoord - mc.getRenderManager().renderPosX, hitPos.yCoord - mc.getRenderManager().renderPosY, hitPos.zCoord - mc.getRenderManager().renderPosZ);
+            GL11.glVertex3d(hitVec.xCoord - mc.getRenderManager().renderPosX, hitVec.yCoord - mc.getRenderManager().renderPosY, hitVec.zCoord - mc.getRenderManager().renderPosZ);
             GL11.glVertex3d(x, y, z);
         }
 
@@ -63,5 +70,7 @@ module = {
         GL11.glColor4f(1.0, 1.0, 1.0, 1.0);
 
         GL11.glPopMatrix();
+
+        drawHitBlock.get() && hitPos.forEach(function(it) RenderUtils.drawBlockBox(it, new Color(255, 0, 0), false));
     }
 }
