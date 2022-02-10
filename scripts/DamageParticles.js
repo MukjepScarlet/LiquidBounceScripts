@@ -21,7 +21,7 @@ module = {
         for each(var entity in mc.theWorld.loadedEntityList) {
             if (entity == mc.thePlayer || !(entity instanceof EntityLivingBase)) continue;
 
-            if (healthMap[entity] === undefined) {
+            if (!healthMap[entity]) {
                 healthMap[entity] = entity.getHealth();
                 continue;
             }
