@@ -1,10 +1,7 @@
-/**
- * updated from FireballTracker
- */
 script = registerScript({
     name: "ProjectileESP",
     authors: ["MyScarlet"],
-    version: "2.0"
+    version: "2.1"
 });
 
 script.import("Core.lib");
@@ -21,15 +18,15 @@ module = {
     category: "Render",
     values: [
         entityHitBoxExpansion = value.createFloat("EntityHitBoxExpansion", 0.25, 0.0, 0.5),
-        maxLength = value.createInteger("MaxLength", 16, 1024),
+        maxLength = value.createInteger("MaxLength", 16, 0, 1024),
         lineWidth = value.createFloat("LineWidth", 2.0, 0.5, 5.0),
         fireball = value.createBoolean("Fireball", true),
         arrow = value.createBoolean("Arrow", true)
     ],
     onRender3D: function() {
-        var size = entityHitBoxExpansion.get();
-        var length = maxLength.get();
-        var renderPos = new Vec3(mc.getRenderManager().renderPosX, mc.getRenderManager().renderPosY, mc.getRenderManager().renderPosZ);
+        size = entityHitBoxExpansion.get();
+        length = maxLength.get();
+        renderPos = new Vec3(mc.getRenderManager().renderPosX, mc.getRenderManager().renderPosY, mc.getRenderManager().renderPosZ);
 
         hitBlockPosWithColor.clear();
         hitEntityWithColor.clear();
@@ -50,8 +47,7 @@ module = {
 
         for each(var entity in mc.theWorld.loadedEntityList) {
             if (fireball.get() && entity instanceof EntityFireball) {
-                //direction vector
-                var acceleration = new Vec3(entity.accelerationX, entity.accelerationY, entity.accelerationZ).normalize();
+                var acceleration = new Vec3(entity.motionX, entity.motionY, entity.motionZ);
 
                 if (acceleration.lengthVector() === 0) continue;
 
@@ -65,16 +61,17 @@ module = {
 
                 var putTarget = false;
 
+                // LINE
                 for (; !blockCollision && cur.distanceTo(position) < length; cur = cur.add(acceleration)) {
                     blockCollision = mc.theWorld.rayTraceBlocks(position, cur, false, true, false);
                     //set fireball box
                     var fireballBox = new AxisAlignedBB(cur.xCoord - size, cur.yCoord - size, cur.zCoord - size, cur.xCoord + size,
                         cur.yCoord + size, cur.zCoord + size).addCoord(acceleration.xCoord, acceleration.yCoord, acceleration.zCoord).expand(1.0, 1.0, 1.0);
 
-                    var chunkMinX = MathHelper.floor_double((fireballBox.minX - 2.0) / 16.0);
-                    var chunkMaxX = MathHelper.floor_double((fireballBox.maxX + 2.0) / 16.0);
-                    var chunkMinZ = MathHelper.floor_double((fireballBox.minZ - 2.0) / 16.0);
-                    var chunkMaxZ = MathHelper.floor_double((fireballBox.maxZ + 2.0) / 16.0);
+                    var chunkMinX = (arrowBox.minX - 2) >> 4;
+                    var chunkMaxX = (arrowBox.maxX + 2) >> 4;
+                    var chunkMinZ = (arrowBox.minZ - 2) >> 4;
+                    var chunkMaxZ = (arrowBox.maxZ + 2) >> 4;
 
                     //check entities in the line
                     for (var x = chunkMinX; x <= chunkMaxX; x++)
@@ -82,7 +79,7 @@ module = {
                             for each(var entities in mc.theWorld.getChunkFromChunkCoords(x, z).getEntityLists()) {
                                 for each(var it in entities) {
                                     var entityBox = it.getEntityBoundingBox().expand(size, size, size);
-                                    if (it === entity || !entityBox.intersectsWith(fireballBox)) continue;
+                                    if (it === entity || it instanceof EntityEnderman || !entityBox.intersectsWith(fireballBox)) continue;
                                     entityCollision = entityBox.calculateIntercept(position, cur);
                                     if (entityCollision) {
                                         blockCollision = entityCollision;
@@ -110,12 +107,13 @@ module = {
             }
 
             if (arrow.get() && entity instanceof EntityArrow && !getField(entity, "field_70254_i" /*private boolean inGround */ ).get(entity)) {
-                //motion
                 var acceleration = new Vec3(entity.motionX, entity.motionY, entity.motionZ);
+
+                if (acceleration.lengthVector() === 0) continue;
 
                 var arrowColor = entity.shootingEntity && TeamsModule.isInYourTeam(entity.shootingEntity) ? new Color(0, 255, 0) : new Color(255, 0, 0);
 
-                var position = new Vec3(entity.posX, entity.posY, entity.posZ),
+                var position = entity.getPositionVector(),
                     cur = position.add(acceleration),
                     lastCur = position;
 
@@ -127,16 +125,17 @@ module = {
 
                 var putTarget = false;
 
+                // CURVE
                 for (var lengthSum = 0; !blockCollision && lengthSum < length; cur = cur.add(acceleration)) {
                     blockCollision = mc.theWorld.rayTraceBlocks(lastCur, cur, false, true, false);
                     //set arrow box
                     var arrowBox = new AxisAlignedBB(cur.xCoord - size, cur.yCoord - size, cur.zCoord - size, cur.xCoord + size,
                         cur.yCoord + size, cur.zCoord + size).addCoord(acceleration.xCoord, acceleration.yCoord, acceleration.zCoord).expand(1.0, 1.0, 1.0);
 
-                    var chunkMinX = MathHelper.floor_double((arrowBox.minX - 2.0) / 16.0);
-                    var chunkMaxX = MathHelper.floor_double((arrowBox.maxX + 2.0) / 16.0);
-                    var chunkMinZ = MathHelper.floor_double((arrowBox.minZ - 2.0) / 16.0);
-                    var chunkMaxZ = MathHelper.floor_double((arrowBox.maxZ + 2.0) / 16.0);
+                    var chunkMinX = (arrowBox.minX - 2) >> 4;
+                    var chunkMaxX = (arrowBox.maxX + 2) >> 4;
+                    var chunkMinZ = (arrowBox.minZ - 2) >> 4;
+                    var chunkMaxZ = (arrowBox.maxZ + 2) >> 4;
 
                     //check entities in the route(parabola)
                     for (var x = chunkMinX; x <= chunkMaxX; x++)
@@ -144,7 +143,7 @@ module = {
                             for each(var entities in mc.theWorld.getChunkFromChunkCoords(x, z).getEntityLists()) {
                                 for each(var it in entities) {
                                     var entityBox = it.getEntityBoundingBox().expand(size, size, size);
-                                    if (it === entity || !entityBox.intersectsWith(arrowBox)) continue;
+                                    if (it === entity || it instanceof EntityEnderman || !entityBox.intersectsWith(arrowBox)) continue;
                                     entityCollision = entityBox.calculateIntercept(lastCur, cur);
                                     if (entityCollision) {
                                         blockCollision = entityCollision;
