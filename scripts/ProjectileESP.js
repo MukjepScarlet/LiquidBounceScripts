@@ -1,14 +1,17 @@
 script = registerScript({
     name: "ProjectileESP",
     authors: ["MyScarlet"],
-    version: "2.1"
+    version: "3.0"
 });
 
 script.import("Core.lib");
 script.import("utils/RenderUtils.js");
 
-var hitBlockPosWithColor = new java.util.HashMap(); //<BlcokPos, Color>
-var hitEntityWithColor = new java.util.HashMap(); //<EntityLivingBase, Color>
+Cylinder = Java.type("org.lwjgl.util.glu.Cylinder");
+
+var hitPositionWithColor = new java.util.HashMap(); //<RayTraceResult, Color>
+
+var renderPos;
 
 var TeamsModule = LiquidBounce.moduleManager.getModule("Teams");
 
@@ -17,19 +20,18 @@ module = {
     escription: "Draw the route of fireballs & arrows.",
     category: "Render",
     values: [
-        entityHitBoxExpansion = value.createFloat("EntityHitBoxExpansion", 0.25, 0.0, 0.5),
-        maxLength = value.createInteger("MaxLength", 16, 0, 1024),
+        maxLength = value.createInteger("MaxLength", 16, 0, 256),
         lineWidth = value.createFloat("LineWidth", 2.0, 0.5, 5.0),
+        heldItem = value.createBoolean("HeldItem", false),
         fireball = value.createBoolean("Fireball", true),
-        arrow = value.createBoolean("Arrow", true)
+        arrow = value.createBoolean("Arrow", true),
+        fishHook = value.createBoolean("FishHook", true),
+        other = value.createBoolean("Other", true)
     ],
     onRender3D: function() {
-        size = entityHitBoxExpansion.get();
-        length = maxLength.get();
         renderPos = new Vec3(mc.getRenderManager().renderPosX, mc.getRenderManager().renderPosY, mc.getRenderManager().renderPosZ);
 
-        hitBlockPosWithColor.clear();
-        hitEntityWithColor.clear();
+        hitPositionWithColor.clear();
 
         GL11.glPushMatrix();
 
@@ -45,127 +47,107 @@ module = {
 
         GL11.glLineWidth(lineWidth.get());
 
-        for each(var entity in mc.theWorld.loadedEntityList) {
-            if (fireball.get() && entity instanceof EntityFireball) {
-                var acceleration = new Vec3(entity.motionX, entity.motionY, entity.motionZ);
+        for each (var entity in mc.theWorld.loadedEntityList) {
+            var gravity = 0.0;
+            var size = 0.25;
+            var accelScalar = 0.99; // 0.6 in water
+            var color = new Color(255, 255, 255);
 
-                if (acceleration.lengthVector() === 0) continue;
+            var startPos = entity.getPositionVector();
+            var acceleration = new Vec3(entity.motionX, entity.motionY, entity.motionZ);
 
-                var fireballColor = new Color(255, 0, 0);
+            if (entity instanceof EntityFireball) {
+                if (!fireball.get()) continue;
 
-                var position = entity.getPositionVector(),
-                    cur = position.add(acceleration);
+                accelScalar = 1.0;
+                color = new Color(255, 0, 0);
+                acceleration = acceleration.normalize();
+            } else if (entity instanceof EntityArrow) {
+                if (!arrow.get() || getField(entity, "field_70254_i" /*private boolean inGround */).get(entity)) continue;
 
-                var blockCollision = null,
-                    entityCollision = null;
+                gravity = 0.05;
+                size = 0.3;
+                color = entity.shootingEntity && TeamsModule.isInYourTeam(entity.shootingEntity) ? new Color(0, 255, 0) : new Color(255, 0, 0);
+            } else if (entity instanceof EntityFishHook) {
+                if (!fishHook.get()) continue;
 
-                var putTarget = false;
+                gravity = 0.04;
+                size = 0.25;
+                accelScalar = 0.92;
+                color = new Color(255, 192, 203);
+            } else if (entity instanceof EntityEnderPearl || entity instanceof EntitySnowball || entity instanceof EntityEgg) {
+                if (!other.get()) continue;
 
-                // LINE
-                for (; !blockCollision && cur.distanceTo(position) < length; cur = cur.add(acceleration)) {
-                    blockCollision = mc.theWorld.rayTraceBlocks(position, cur, false, true, false);
-                    //set fireball box
-                    var fireballBox = new AxisAlignedBB(cur.xCoord - size, cur.yCoord - size, cur.zCoord - size, cur.xCoord + size,
-                        cur.yCoord + size, cur.zCoord + size).addCoord(acceleration.xCoord, acceleration.yCoord, acceleration.zCoord).expand(1.0, 1.0, 1.0);
-
-                    var chunkMinX = (arrowBox.minX - 2) >> 4;
-                    var chunkMaxX = (arrowBox.maxX + 2) >> 4;
-                    var chunkMinZ = (arrowBox.minZ - 2) >> 4;
-                    var chunkMaxZ = (arrowBox.maxZ + 2) >> 4;
-
-                    //check entities in the line
-                    for (var x = chunkMinX; x <= chunkMaxX; x++)
-                        for (var z = chunkMinZ; z <= chunkMaxZ; z++)
-                            for each(var entities in mc.theWorld.getChunkFromChunkCoords(x, z).getEntityLists()) {
-                                for each(var it in entities) {
-                                    var entityBox = it.getEntityBoundingBox().expand(size, size, size);
-                                    if (it === entity || it instanceof EntityEnderman || !entityBox.intersectsWith(fireballBox)) continue;
-                                    entityCollision = entityBox.calculateIntercept(position, cur);
-                                    if (entityCollision) {
-                                        blockCollision = entityCollision;
-                                        hitEntityWithColor.put(it, fireballColor);
-                                        putTarget = true;
-                                    }
-                                }
-                            }
-                }
-
-                var hitVec;
-                if (blockCollision) {
-                    putTarget || hitBlockPosWithColor.put(blockCollision.getBlockPos(), fireballColor);
-                    hitVec = blockCollision.hitVec;
-                } else hitVec = cur;
-
-                GL11.glBegin(1);
-
-                RenderUtils.glColor(fireballColor);
-
-                GL11.glVertex3d(hitVec.xCoord - renderPos.xCoord, hitVec.yCoord - renderPos.yCoord, hitVec.zCoord - renderPos.zCoord);
-                GL11.glVertex3d(position.xCoord - renderPos.xCoord, position.yCoord - renderPos.yCoord, position.zCoord - renderPos.zCoord);
-
-                GL11.glEnd();
+                gravity = 0.03;
+                size = 0.25;
+                color = entity instanceof EntityEnderPearl ? new Color(0, 139, 139) : new Color(240, 255, 240);
+            } else {
+                continue;
             }
 
-            if (arrow.get() && entity instanceof EntityArrow && !getField(entity, "field_70254_i" /*private boolean inGround */ ).get(entity)) {
-                var acceleration = new Vec3(entity.motionX, entity.motionY, entity.motionZ);
+            getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleration, entity);
+        }
 
-                if (acceleration.lengthVector() === 0) continue;
+        tag:
+        if (heldItem.get() && mc.thePlayer.getHeldItem()) {
+            var item = mc.thePlayer.getHeldItem().getItem();
 
-                var arrowColor = entity.shootingEntity && TeamsModule.isInYourTeam(entity.shootingEntity) ? new Color(0, 255, 0) : new Color(255, 0, 0);
+            var accelSize = 1.5;
+            var gravity = 0.0;
+            var size = 0.25;
+            var accelScalar = 0.99; // 0.6 in water
+            var color = new Color(255, 255, 255);
 
-                var position = entity.getPositionVector(),
-                    cur = position.add(acceleration),
-                    lastCur = position;
+            if (item === Items.fire_charge) {
+                if (!fireball.get()) break tag;
 
-                var blockCollision = null,
-                    entityCollision = null;
+                accelScalar = 1.0;
+                color = new Color(255, 0, 0);
+            } else if (item === Items.bow) {
+                if (!arrow.get()) break tag;
 
-                GL11.glBegin(3);
-                RenderUtils.glColor(arrowColor);
+                gravity = 0.05;
+                size = 0.3;
 
-                var putTarget = false;
+                var power = mc.thePlayer.getItemInUseDuration() * 0.05;
+                power = power * (power + 2) / 3;
 
-                // CURVE
-                for (var lengthSum = 0; !blockCollision && lengthSum < length; cur = cur.add(acceleration)) {
-                    blockCollision = mc.theWorld.rayTraceBlocks(lastCur, cur, false, true, false);
-                    //set arrow box
-                    var arrowBox = new AxisAlignedBB(cur.xCoord - size, cur.yCoord - size, cur.zCoord - size, cur.xCoord + size,
-                        cur.yCoord + size, cur.zCoord + size).addCoord(acceleration.xCoord, acceleration.yCoord, acceleration.zCoord).expand(1.0, 1.0, 1.0);
+                if (power < 0.1) break tag;
 
-                    var chunkMinX = (arrowBox.minX - 2) >> 4;
-                    var chunkMaxX = (arrowBox.maxX + 2) >> 4;
-                    var chunkMinZ = (arrowBox.minZ - 2) >> 4;
-                    var chunkMaxZ = (arrowBox.maxZ + 2) >> 4;
+                if (power > 1) power = 1;
 
-                    //check entities in the route(parabola)
-                    for (var x = chunkMinX; x <= chunkMaxX; x++)
-                        for (var z = chunkMinZ; z <= chunkMaxZ; z++)
-                            for each(var entities in mc.theWorld.getChunkFromChunkCoords(x, z).getEntityLists()) {
-                                for each(var it in entities) {
-                                    var entityBox = it.getEntityBoundingBox().expand(size, size, size);
-                                    if (it === entity || it instanceof EntityEnderman || !entityBox.intersectsWith(arrowBox)) continue;
-                                    entityCollision = entityBox.calculateIntercept(lastCur, cur);
-                                    if (entityCollision) {
-                                        blockCollision = entityCollision;
-                                        hitEntityWithColor.put(it, arrowColor);
-                                        putTarget = true;
-                                    }
-                                }
-                            }
+                accelSize = power * 3;
 
-                    var scalar = BlockUtils.getMaterial(new BlockPos(cur)) === Material.water ? 0.6 : 0.99;
-                    acceleration = new Vec3(acceleration.xCoord * scalar, acceleration.yCoord * scalar, acceleration.zCoord * scalar)
-                        .subtract(0, 0.05000000074505806, 0);
+                color = Color.getHSBColor((1 - power) / 3, 1, 1);
+            } else if (item === Items.fishing_rod) {
+                if (!fishHook.get()) break tag;
 
-                    GL11.glVertex3d(cur.xCoord - renderPos.xCoord, cur.yCoord - renderPos.yCoord, cur.zCoord - renderPos.zCoord);
+                gravity = 0.04;
+                size = 0.25;
+                accelScalar = 0.92;
+                color = new Color(255, 192, 203);
+            } else if (item === Items.ender_pearl || item === Items.snowball || item === Items.egg) {
+                if (!other.get()) break tag;
 
-                    lengthSum += lastCur.distanceTo(cur);
-                    lastCur = cur;
-                }
-                GL11.glEnd();
-
-                blockCollision && !putTarget && hitBlockPosWithColor.put(blockCollision.getBlockPos(), arrowColor);
+                gravity = 0.03;
+                size = 0.25;
+                color = item === Items.ender_pearl ? new Color(0, 139, 139) : new Color(240, 255, 240);
+            } else {
+                break tag;
             }
+
+            var yaw = Math.toRadians(mc.thePlayer.rotationYaw), pitch = Math.toRadians(mc.thePlayer.rotationPitch);
+            var startPos = renderPos.addVector(-0.16 * Math.cos(yaw), mc.thePlayer.eyeHeight - 0.10000000149011612, -0.16 * Math.sin(yaw));
+
+            var acceleration = new Vec3(
+                -Math.sin(yaw) * Math.cos(pitch),
+                -Math.sin(pitch),
+                Math.cos(yaw) * Math.cos(pitch)
+            ).normalize();
+
+            acceleration = new Vec3(acceleration.xCoord * accelSize, acceleration.yCoord * accelSize, acceleration.zCoord * accelSize);
+
+            getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleration, mc.thePlayer);
         }
 
         GL11.glEnable(3553);
@@ -178,7 +160,78 @@ module = {
 
         GL11.glPopMatrix();
 
-        hitBlockPosWithColor.forEach(function(pos, color) RenderUtils.drawBlockBox(pos, color, false));
-        hitEntityWithColor.forEach(function(ent, color) RenderUtils.drawEntityBox(ent, color, false));
+        for (var hitResult in hitPositionWithColor) {
+            var color = hitPositionWithColor[hitResult];
+
+            switch (hitResult.typeOfHit) {
+                case MovingObjectPosition.MovingObjectType.ENTITY:
+                    RenderUtils.drawEntityBox(hitResult.entityHit, color, false);
+                    break;
+                case MovingObjectPosition.MovingObjectType.BLOCK:
+                    RenderUtils.drawBlockBox(hitResult.getBlockPos(), color, false);
+                    break;
+                default:
+                    continue;
+            }
+        }
     }
+}
+
+function getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleration, entityExcluded) {
+    if (!acceleration.lengthVector()) return;
+
+    var trackPoints = [];
+
+    var cur = startPos.add(acceleration), lastCur = startPos;
+
+    var blockCollision = null, entityCollision = null;
+
+    // CURVE
+    curve:
+    for (var curveLength = 0; (blockCollision = mc.theWorld.rayTraceBlocks(lastCur, cur, false, true, false)) == null && curveLength < maxLength.get(); ) {
+
+        var projectileBox = new AxisAlignedBB(cur.xCoord - size, cur.yCoord - size, cur.zCoord - size, cur.xCoord + size,
+            cur.yCoord + size, cur.zCoord + size).addCoord(acceleration.xCoord, acceleration.yCoord, acceleration.zCoord).expand(1.0, 1.0, 1.0);
+
+        var chunkMinX = (projectileBox.minX - 2) >> 4, chunkMaxX = (projectileBox.maxX + 2) >> 4;
+        var chunkMinZ = (projectileBox.minZ - 2) >> 4, chunkMaxZ = (projectileBox.maxZ + 2) >> 4;
+
+        //check entities in the track
+        for (var x = chunkMinX; x <= chunkMaxX; x++)
+            for (var z = chunkMinZ; z <= chunkMaxZ; z++)
+                for each (var entities in mc.theWorld.getChunkFromChunkCoords(x, z).getEntityLists()) {
+                    for each (var it in entities) {
+                        var entityBox = it.getEntityBoundingBox().expand(size, size, size);
+                        if (it === entityExcluded || it instanceof EntityEnderman || !entityBox.intersectsWith(projectileBox))
+                            continue;
+
+                        if (entityCollision = entityBox.calculateIntercept(lastCur, cur)) {
+                            entityCollision.typeOfHit = MovingObjectPosition.MovingObjectType.ENTITY;
+                            entityCollision.entityHit = it;
+                            hitPositionWithColor[entityCollision] = color;
+                            break curve;
+                        }
+                    }
+                }
+
+        var scalar = BlockUtils.getMaterial(new BlockPos(cur)) === Material.water ? 0.6 : accelScalar;
+        acceleration = new Vec3(acceleration.xCoord * scalar, acceleration.yCoord * scalar, acceleration.zCoord * scalar).subtract(0, gravity, 0);
+
+        trackPoints.push(cur);
+
+        curveLength += lastCur.distanceTo(cur);
+        lastCur = cur;
+        cur = cur.add(acceleration);
+    }
+
+    blockCollision && (hitPositionWithColor[blockCollision] = color);
+
+    if (!trackPoints.length) return;
+
+    var mode = gravity ? 3 : 1;
+
+    GL11.glBegin(gravity ? 3 : 1);
+    RenderUtils.glColor(color);
+    (gravity ? trackPoints : [startPos, trackPoints.last()]).forEach(function(v) GL11.glVertex3d(v.xCoord - renderPos.xCoord, v.yCoord - renderPos.yCoord, v.zCoord - renderPos.zCoord));
+    GL11.glEnd();
 }
