@@ -197,19 +197,19 @@ module = {
             var sideVec = hitResult.sideHit.getDirectionVec();
             sideVec = new Vec3(sideVec.getX() * 0.0021, sideVec.getY() * 0.0021, sideVec.getZ() * 0.0021);
             var center = hitResult.hitVec.add(sideVec);
-			GL11.glTranslated(center.xCoord - renderPos.xCoord, center.yCoord - renderPos.yCoord, center.zCoord - renderPos.zCoord);
-			
-			switch (hitResult.sideHit) {
-            case EnumFacing.WEST: GL11.glRotated(90, 0, 1, 0); break;
-			case EnumFacing.EAST: GL11.glRotated(90, 0, -1, 0); break;
-			case EnumFacing.UP: GL11.glRotated(90, 1, 0, 0); break;
-            case EnumFacing.DOWN: GL11.glRotated(90, -1, 0, 0); break;
-            case EnumFacing.SOUTH: GL11.glRotated(180, 1, 0, 0); break;
-			}
-			
-			RenderUtils.drawFilledCircle(0, 0, 0.1, color);
+            GL11.glTranslated(center.xCoord - renderPos.xCoord, center.yCoord - renderPos.yCoord, center.zCoord - renderPos.zCoord);
 
-			GL11.glPopMatrix();
+            switch (hitResult.sideHit) {
+                case EnumFacing.WEST: GL11.glRotated(90, 0, 1, 0); break;
+                case EnumFacing.EAST: GL11.glRotated(90, 0, -1, 0); break;
+                case EnumFacing.UP: GL11.glRotated(90, 1, 0, 0); break;
+                case EnumFacing.DOWN: GL11.glRotated(90, -1, 0, 0); break;
+                case EnumFacing.SOUTH: GL11.glRotated(180, 1, 0, 0); break;
+            }
+
+            RenderUtils.drawFilledCircle(0, 0, 0.1, color);
+
+            GL11.glPopMatrix();
         }
     }
 }
