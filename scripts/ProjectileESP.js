@@ -1,7 +1,7 @@
 script = registerScript({
     name: "ProjectileESP",
     authors: ["MyScarlet"],
-    version: "3.1"
+    version: "3.2"
 });
 
 script.import("Core.lib");
@@ -191,6 +191,25 @@ module = {
                 default:
                     continue;
             }
+
+            GL11.glPushMatrix();
+			
+            var sideVec = hitResult.sideHit.getDirectionVec();
+            sideVec = new Vec3(sideVec.getX() * 0.0021, sideVec.getY() * 0.0021, sideVec.getZ() * 0.0021);
+            var center = hitResult.hitVec.add(sideVec);
+			GL11.glTranslated(center.xCoord - renderPos.xCoord, center.yCoord - renderPos.yCoord, center.zCoord - renderPos.zCoord);
+			
+			switch (hitResult.sideHit) {
+            case EnumFacing.WEST: GL11.glRotated(90, 0, 1, 0); break;
+			case EnumFacing.EAST: GL11.glRotated(90, 0, -1, 0); break;
+			case EnumFacing.UP: GL11.glRotated(90, 1, 0, 0); break;
+            case EnumFacing.DOWN: GL11.glRotated(90, -1, 0, 0); break;
+            case EnumFacing.SOUTH: GL11.glRotated(180, 1, 0, 0); break;
+			}
+			
+			RenderUtils.drawFilledCircle(0, 0, 0.1, color);
+
+			GL11.glPopMatrix();
         }
     }
 }
@@ -198,7 +217,7 @@ module = {
 function getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleration, entityExcluded) {
     if (!acceleration.lengthVector()) return;
 
-    var trackPoints = [];
+    var trackPoints = [startPos];
 
     // Vec3
     var cur = startPos.add(acceleration), lastCur = startPos;
@@ -228,6 +247,7 @@ function getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleratio
                             entityCollision.typeOfHit = MovingObjectPosition.MovingObjectType.ENTITY;
                             entityCollision.entityHit = it;
                             hitPositionWithColor[entityCollision] = color;
+                            trackPoints.push(entityCollision.hitVec);
                             break curve;
                         }
                     }
@@ -243,12 +263,14 @@ function getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleratio
         cur = cur.add(acceleration);
     }
 
-    blockCollision && (hitPositionWithColor[blockCollision] = color);
+    blockCollision && (hitPositionWithColor[blockCollision] = color) && trackPoints.push(blockCollision.hitVec);
 
     if (!trackPoints.length) return;
 
     GL11.glBegin(gravity ? 3 : 1);
     RenderUtils.glColor(color);
-    (gravity ? trackPoints : [startPos, trackPoints.last()]).forEach(function(v) GL11.glVertex3d(v.xCoord - renderPos.xCoord, v.yCoord - renderPos.yCoord, v.zCoord - renderPos.zCoord));
+    // Start=startPos End=hitVec
+    (gravity ? trackPoints : [startPos, trackPoints.last()]).forEach(function(v)
+        GL11.glVertex3d(v.xCoord - renderPos.xCoord, v.yCoord - renderPos.yCoord, v.zCoord - renderPos.zCoord));
     GL11.glEnd();
 }
