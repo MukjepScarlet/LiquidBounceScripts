@@ -1,13 +1,11 @@
 script = registerScript({
     name: "ProjectileESP",
     authors: ["MyScarlet"],
-    version: "3.0"
+    version: "3.1"
 });
 
 script.import("Core.lib");
 script.import("utils/RenderUtils.js");
-
-Cylinder = Java.type("org.lwjgl.util.glu.Cylinder");
 
 var hitPositionWithColor = new java.util.HashMap(); //<RayTraceResult, Color>
 
@@ -63,7 +61,7 @@ module = {
                 color = new Color(255, 0, 0);
                 acceleration = acceleration.normalize();
             } else if (entity instanceof EntityArrow) {
-                if (!arrow.get() || getField(entity, "field_70254_i" /*private boolean inGround */).get(entity)) continue;
+                if (!arrow.get() || getField(entity, "field_70254_i" /**private boolean inGround */).get(entity)) continue;
 
                 gravity = 0.05;
                 size = 0.3;
@@ -75,12 +73,22 @@ module = {
                 size = 0.25;
                 accelScalar = 0.92;
                 color = new Color(255, 192, 203);
+            } else if (entity instanceof EntityPotion) {
+                if (!other.get()) continue;
+
+                gravity = 0.05;
+                size = 0.25;
+                accelSize = 0.5;
+
+                var itemStack = getField(entity, "field_70197_d"/**private ItemStack potionDamage */).get(entity);
+                var item = itemStack.getItem();
+                color = new Color(item.getColorFromDamage(itemStack.getItemDamage()));
             } else if (entity instanceof EntityEnderPearl || entity instanceof EntitySnowball || entity instanceof EntityEgg) {
                 if (!other.get()) continue;
 
                 gravity = 0.03;
                 size = 0.25;
-                color = entity instanceof EntityEnderPearl ? new Color(0, 139, 139) : new Color(240, 255, 240);
+                color = entity instanceof EntityEnderPearl ? new Color(0, 205, 205) : new Color(240, 255, 240);
             } else {
                 continue;
             }
@@ -88,23 +96,25 @@ module = {
             getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleration, entity);
         }
 
-        tag:
-        if (heldItem.get() && mc.thePlayer.getHeldItem()) {
-            var item = mc.thePlayer.getHeldItem().getItem();
+        var itemStack = mc.thePlayer.getHeldItem();
+        heldItemCheck:
+        if (heldItem.get() && itemStack) {
+            var item = itemStack.getItem();
 
             var accelSize = 1.5;
             var gravity = 0.0;
             var size = 0.25;
             var accelScalar = 0.99; // 0.6 in water
             var color = new Color(255, 255, 255);
+            var isSplashPotion = false;
 
             if (item === Items.fire_charge) {
-                if (!fireball.get()) break tag;
+                if (!fireball.get()) break heldItemCheck;
 
                 accelScalar = 1.0;
                 color = new Color(255, 0, 0);
             } else if (item === Items.bow) {
-                if (!arrow.get()) break tag;
+                if (!arrow.get()) break heldItemCheck;
 
                 gravity = 0.05;
                 size = 0.3;
@@ -112,7 +122,7 @@ module = {
                 var power = mc.thePlayer.getItemInUseDuration() * 0.05;
                 power = power * (power + 2) / 3;
 
-                if (power < 0.1) break tag;
+                if (power < 0.1) break heldItemCheck;
 
                 if (power > 1) power = 1;
 
@@ -120,20 +130,28 @@ module = {
 
                 color = Color.getHSBColor((1 - power) / 3, 1, 1);
             } else if (item === Items.fishing_rod) {
-                if (!fishHook.get()) break tag;
+                if (!fishHook.get()) break heldItemCheck;
 
                 gravity = 0.04;
                 size = 0.25;
                 accelScalar = 0.92;
                 color = new Color(255, 192, 203);
+            } else if (item instanceof ItemPotion && ItemPotion.isSplash(itemStack.getItemDamage())) {
+                if (!other.get()) break heldItemCheck;
+
+                isSplashPotion = true;
+                gravity = 0.05;
+                size = 0.25;
+                accelSize = 0.5;
+                color = new Color(item.getColorFromDamage(itemStack.getItemDamage()));
             } else if (item === Items.ender_pearl || item === Items.snowball || item === Items.egg) {
-                if (!other.get()) break tag;
+                if (!other.get()) break heldItemCheck;
 
                 gravity = 0.03;
                 size = 0.25;
-                color = item === Items.ender_pearl ? new Color(0, 139, 139) : new Color(240, 255, 240);
+                color = item === Items.ender_pearl ? new Color(0, 205, 205) : new Color(240, 255, 240);
             } else {
-                break tag;
+                break heldItemCheck;
             }
 
             var yaw = Math.toRadians(mc.thePlayer.rotationYaw), pitch = Math.toRadians(mc.thePlayer.rotationPitch);
@@ -141,7 +159,7 @@ module = {
 
             var acceleration = new Vec3(
                 -Math.sin(yaw) * Math.cos(pitch),
-                -Math.sin(pitch),
+                -Math.sin(pitch - (isSplashPotion ? 0.3490658504 : 0)), // -20 deg
                 Math.cos(yaw) * Math.cos(pitch)
             ).normalize();
 
@@ -182,11 +200,12 @@ function getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleratio
 
     var trackPoints = [];
 
+    // Vec3
     var cur = startPos.add(acceleration), lastCur = startPos;
 
+    // RayTraceResult
     var blockCollision = null, entityCollision = null;
 
-    // CURVE
     curve:
     for (var curveLength = 0; (blockCollision = mc.theWorld.rayTraceBlocks(lastCur, cur, false, true, false)) == null && curveLength < maxLength.get(); ) {
 
@@ -227,8 +246,6 @@ function getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleratio
     blockCollision && (hitPositionWithColor[blockCollision] = color);
 
     if (!trackPoints.length) return;
-
-    var mode = gravity ? 3 : 1;
 
     GL11.glBegin(gravity ? 3 : 1);
     RenderUtils.glColor(color);
