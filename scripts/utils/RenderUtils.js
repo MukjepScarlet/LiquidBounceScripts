@@ -91,17 +91,8 @@ function disableGL3D() {
     GL11.glColor4f(1, 1, 1, 1);
 }
 
-/**
- * Linear Algebra
- */
-
-/**org.lwjgl.util.vector (Vectors and Matices are Serializable)*/
-[
-    "Matrix", "Matrix2f", "Matrix3f", "Matrix4f",
-    "ReadableVector", "ReadableVector2f", "ReadableVector3f", "ReadableVector4f", "Quaternion",
-    "Vector", "Vector2f", "Vector3f", "Vector4f",
-    "WritableVector2f", "WritableVector3f", "WritableVector4f"
-].forEach(function(v) eval(v + "=Java.type(\"org.lwjgl.util.vector." + v + "\")"));
+load("nashorn:mozilla_compat.js");
+importPackage("org.lwjgl.util.vector");
 
 var AxisAlignedBB = Java.type("net.minecraft.util.AxisAlignedBB");
 var Vec3 = Java.type("net.minecraft.util.Vec3");
