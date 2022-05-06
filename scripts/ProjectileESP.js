@@ -1,7 +1,7 @@
 script = registerScript({
     name: "ProjectileESP",
     authors: ["MyScarlet"],
-    version: "3.2"
+    version: "3.3"
 });
 
 script.import("Core.lib");
@@ -18,6 +18,7 @@ module = {
     escription: "Draw the route of fireballs & arrows.",
     category: "Render",
     values: [
+		maxAmount = value.createInteger("MaxAmount", 16, 1, 64),
         maxLength = value.createInteger("MaxLength", 16, 0, 256),
         lineWidth = value.createFloat("LineWidth", 2.0, 0.5, 5.0),
         heldItem = value.createBoolean("HeldItem", false),
@@ -45,7 +46,10 @@ module = {
 
         GL11.glLineWidth(lineWidth.get());
 
+		var count = 0;
         for each (var entity in mc.theWorld.loadedEntityList) {
+			if (count >= maxAmount.get()) break;
+			
             var gravity = 0.0;
             var size = 0.25;
             var accelScalar = 0.99; // 0.6 in water
@@ -94,6 +98,7 @@ module = {
             }
 
             getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleration, entity);
+			count++;
         }
 
         var itemStack = mc.thePlayer.getHeldItem();
@@ -265,7 +270,7 @@ function getTrackAndHit(gravity, size, accelScalar, color, startPos, acceleratio
 
     blockCollision && (hitPositionWithColor[blockCollision] = color) && trackPoints.push(blockCollision.hitVec);
 
-    if (!trackPoints.length) return;
+    if (trackPoints.length <= 1) return;
 
     GL11.glBegin(gravity ? 3 : 1);
     RenderUtils.glColor(color);
